@@ -13,7 +13,10 @@ class BaseBankParser:
         text = ""
         with pdfplumber.open(self.file_path) as pdf:
             for page in pdf.pages:
-                text += page.extract_text()
+                extracted = page.extract_text()
+                if extracted: # Проверяем, что текст успешно считался
+                    text += extracted + "\n"
+
         return text
     
     def parse(self):
@@ -21,9 +24,24 @@ class BaseBankParser:
         raw_text = self._get_raw_text()
         return self._process_text(raw_text)
 
-    def _process_text(self, text):
-        """Обрабатываем текст"""
-        pass
+    def _process_text(self, text: str) -> list:
+        """
+        Находим нужные данные по паттерну, группируем
+        и возвращаем их в виде пары "ключ - значение"
+        """
+        pattern = self.make_pattern()
+        result = []
+        for match in pattern.finditer(text):
+            transaction_dict = match.groupdict()
+            result.append(transaction_dict)
+        
+        return result
+    
+    def make_pattern(self):
+        """Предохранитель: заставляет дочерние классы создавать свой паттерн"""
+        raise NotImplementedError(
+            "Вы забыли создать метод make_pattern в дочернем классе"
+)
 
 
 class TBankParser(BaseBankParser):
@@ -31,31 +49,18 @@ class TBankParser(BaseBankParser):
 
     def make_pattern(self):
         """Создание паттерна для нахождения данных"""
-        pattern = (
-            # Дата и время
-            r"(?P<date_time>\d{2}\.\d{2}\.\d{4}\s\d{2}:\d{2})[\s\n]*"
+
+        return re.compile(r"""
+            # Дата и время операции
+            (?P<date_time>\d{2}\.\d{2}\.\d{4}\s\d{2}:\d{2})\s+
             # Дата учета    
-            r"(?P<date_accounting>\d{2}\.\d{2}\.\d{4})[\s\n]*"
+            (?P<date_accounting>\d{2}\.\d{2}\.\d{4})\s+
             # Любые символы до начала суммы
-            r"(?P<description_operation>.+?)[\s\n]*"
+            (?P<description_operation>.*?)\s+
             # Сумма с пробелами в тысячах или без них + значок рубля
-            r"(?P<sum_value>[+-]?\d+(?:\s\d+)*\.\d{2})\s*₽?[\s\n]*"
-            r"(?P<remainder>\d+(?:\s\d+)*\.\d{2})" 
-)
-        return pattern
-    
-    def _process_text(self, text: str) -> list:
-        """
-        Находим нужные данные по паттерну, группируем
-        и возвращаем их в виде пары "ключ - значение"
-        """
-        pattern = self.make_pattern()
-        result = []
-        for match in re.finditer(pattern, text):
-            transaction_dict = match.groupdict()
-            result.append(transaction_dict)
-                
-        return result
+            (?P<sum_value>[+--—–]?\d+(?:\s\d+)*\.\d{2})\s*₽?\s+
+            (?P<remainder>\d+(?:\s\d+)*\.\d{2}\s*₽?)
+""", re.VERBOSE | re.MULTILINE) 
 
 
 class SberParser(BaseBankParser):
@@ -63,32 +68,21 @@ class SberParser(BaseBankParser):
 
     def make_pattern(self):
         """Создание паттерна для нахождения данных"""
-        pattern = (
-            # Дата операции
-            r"(?P<date_operation>\d{2}\.\d{2}\.\d{4}\s\d{2}:\d{2})[\s\n]*"
-            # Дата обработки  
-            r"(?P<date_processing>\d{2}\.\d{2}\.\d{4})[\s\n]*"
-            # Любые символы до начала суммы
-            r"(?P<description_operation>.+?)[\s\n]*"
-            # Сумма с пробелами в тысячах или без них + значок рубля
-            r"(?P<sum_value>[+-]?\d+(?:\s\d+)*\,\d{2})\s*₽?[\s\n]*"
-            r"(?P<remainder>\d+(?:\s\d+)*\,\d{2})" 
-)
-        return pattern
-    
-    def _process_text(self, text: str) -> list:
-        """
-        Находим нужные данные по паттерну, группируем
-        и возвращаем их в виде пары "ключ - значение"
-        """
-        pattern = self.make_pattern()
-        result = []
-        for match in re.finditer(pattern, text):
-            transaction_dict = match.groupdict()
-            result.append(transaction_dict)
-        
-        return result
 
+        return re.compile(r"""
+            # Дата и время операции
+            (?P<date_time>\d{2}\.\d{2}\.\d{4}\s\d{2}:\d{2})\s+
+            # Дата учета    
+            (?P<date_accounting>\d{2}\.\d{2}\.\d{4})\s+
+            # Любые символы до начала суммы
+            (?P<description_operation>.*?)\s+
+            # Сумма с пробелами в тысячах или без них + значок рубля
+            (?P<sum_value>[+--—–]?\d+(?:\s\d+)*\,\d{2})\s*₽?\s+
+            (?P<remainder>\d+(?:\s\d+)*\,\d{2}\s*₽?)
+""", re.VERBOSE | re.MULTILINE) 
+
+t_bank = TBankParser("data/t_bank_test.pdf")
 sber = SberParser("data/sber_bank_test.pdf")
+print(t_bank.parse())
 print(sber.parse())
 
