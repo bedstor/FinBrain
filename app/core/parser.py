@@ -1,6 +1,27 @@
 import pdfplumber
 import re
 
+class BankParserFactory:
+    """Фабрика, которая сама определяет банк и запускает парсера"""
+
+    def __init__(self, file_path: str):
+        """Инициализируем атрибуты класса: путь к файлу"""
+        self.file_path = file_path
+    
+    def get_parse(self):
+        """Определяем банк и возвращаем полученные данные из выписки"""
+        base = BaseBankParser(self.file_path)
+        raw_text = base._get_raw_text()
+        ALL_BANKS = [TBankParser, SberParser] # Все существующие банки
+        for bank in ALL_BANKS:
+            for marker in bank.BANK_MARKERS:
+                if marker in raw_text:
+                    return bank(self.file_path)
+        # Если ничего не нашлось - значит, банк неизвестен
+        print("Ошибка: Банк не определен!")
+        return None
+
+
 class BaseBankParser:
     """Стандартная модель банка"""
 
@@ -16,7 +37,6 @@ class BaseBankParser:
                 extracted = page.extract_text()
                 if extracted: # Проверяем, что текст успешно считался
                     text += extracted + "\n"
-
         return text
     
     def parse(self):
@@ -34,7 +54,6 @@ class BaseBankParser:
         for match in pattern.finditer(text):
             transaction_dict = match.groupdict()
             result.append(transaction_dict)
-        
         return result
     
     def make_pattern(self):
@@ -42,10 +61,13 @@ class BaseBankParser:
         raise NotImplementedError(
             "Вы забыли создать метод make_pattern в дочернем классе"
 )
-
-
+    
+    
 class TBankParser(BaseBankParser):
     """Модель Т-банка"""
+
+    # Слова-маркеры, по которым можно отличить Т-банк
+    BANK_MARKERS = ["Т-Банк", "Т-БАНК", "T-Bank", "Тинькофф", "Tinkoff"]
 
     def make_pattern(self):
         """Создание паттерна для нахождения данных"""
@@ -66,6 +88,9 @@ class TBankParser(BaseBankParser):
 class SberParser(BaseBankParser):
     """Модель Сбер-банка"""
 
+    # Слова-маркеры, по которым можно отличить Сбербанк
+    BANK_MARKERS = ["Сбербанк", "СБЕРБАНК", "Sberbank", "SBERBANK"]
+
     def make_pattern(self):
         """Создание паттерна для нахождения данных"""
 
@@ -81,8 +106,7 @@ class SberParser(BaseBankParser):
             (?P<remainder>\d+(?:\s\d+)*\,\d{2}\s*₽?)
 """, re.VERBOSE | re.MULTILINE) 
 
-t_bank = TBankParser("data/t_bank_test.pdf")
-sber = SberParser("data/sber_bank_test.pdf")
-print(t_bank.parse())
-print(sber.parse())
+factory = BankParserFactory("data/sber_bank_test.pdf")
+parser = factory.get_parse()
+print(parser.parse())
 
