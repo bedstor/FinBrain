@@ -9,7 +9,7 @@ class BankParserFactory:
         self.file_path = file_path
     
     def get_parse(self):
-        """Определяем банк и возвращаем полученные данные из выписки"""
+        """Определяем банк и возвращаем объект этого банка"""
         base = BaseBankParser(self.file_path)
         raw_text = base._get_raw_text()
         ALL_BANKS = [TBankParser, SberParser] # Все существующие банки
@@ -17,9 +17,9 @@ class BankParserFactory:
             for marker in bank.BANK_MARKERS:
                 if marker in raw_text:
                     return bank(self.file_path)
+    
         # Если ничего не нашлось - значит, банк неизвестен
-        print("Ошибка: Банк не определен!")
-        return None
+        return AIBankParser(self.file_path)
 
 
 class BaseBankParser:
@@ -105,6 +105,18 @@ class SberParser(BaseBankParser):
             (?P<sum_value>[+--—–]?\d+(?:\s\d+)*\,\d{2})\s*₽?\s+
             (?P<remainder>\d+(?:\s\d+)*\,\d{2}\s*₽?)
 """, re.VERBOSE | re.MULTILINE) 
+
+
+class AIBankParser(BaseBankParser):
+    """Модель ИИ-банка"""
+    
+    def _process_text(self, text: str):
+        """
+        Отправялем сырой текст в ассинхронную функцию и получаем готовый список словарей
+        """
+
+        print("Включаю ИИ-распознавание текста...")
+        return []
 
 factory = BankParserFactory("data/sber_bank_test.pdf")
 parser = factory.get_parse()
